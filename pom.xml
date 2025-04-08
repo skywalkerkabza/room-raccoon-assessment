@@ -71,11 +71,7 @@
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
         <version>3.0.0-M5</version>
-        <configuration>
-          <includes>
-            <include>**/TestRunner.java</include>
-          </includes>
-        </configuration>
+        <!-- Removing explicit includes so that Maven uses default naming patterns -->
       </plugin>
     </plugins>
   </build>
