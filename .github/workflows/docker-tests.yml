@@ -1,42 +1,73 @@
 name: Dockerized Test Execution
-
-on:
+'on':
   push:
-    branches: [ main ]
+    branches:
+      - main
   pull_request:
-    branches: [ main ]
-
+    branches:
+      - main
 jobs:
   run-tests:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Set up Docker Compose
+      - name: Set up Docker
         run: |
           sudo apt-get update
-          sudo apt-get install -y docker-compose-plugin
-          docker compose version
+          sudo apt-get install -y docker.io
+          sudo systemctl start docker
+          sudo docker --version
+      - name: Install Docker Compose
+        run: >
+          sudo curl -L
+          "https://github.com/docker/compose/releases/download/v2.34.0/docker-compose-$(uname
+          -s)-$(uname -m)" -o /usr/local/bin/docker-compose
 
+          sudo chmod +x /usr/local/bin/docker-compose
+
+          docker-compose --version
+      - name: Build test automation image
+        run: docker build -t my-test-automation .
       - name: Start services with Docker Compose
-        run: |
-          docker compose -f docker-compose.yml up -d --build
-          docker compose ps
+        run: >
+          docker-compose -f docker-compose.yml up -d selenium-hub chrome firefox
+          mysql
 
+          docker-compose ps
+      - name: Verify Selenium Hub readiness
+        run: |
+          docker run --network mynetwork \
+            appropriate/curl --retry 10 --retry-delay 5 --retry-connrefused \
+            selenium-hub:4444/wd/hub/status
+      - name: Verify MySQL readiness
+        run: |
+          docker run --network mynetwork \
+            appropriate/curl --retry 10 --retry-delay 5 --retry-connrefused \
+            mysql:3306
       - name: Run tests
         run: |
-          docker compose run --rm test-runner mvn test
-
+          docker run --network mynetwork \
+            -e SELENIUM_HUB_URL=http://selenium-hub:4444/wd/hub \
+            -e DB_URL=jdbc:mysql://mysql:3306/testdb \
+            -e DB_USER=testuser \
+            -e DB_PASSWORD=testpwd \
+            -v ${PWD}/target/screenshots:/app/target/screenshots \
+            my-test-automation
       - name: Collect test artifacts
         if: always()
-        run: |
+        run: >
           mkdir -p test-results
-          [ -d target/screenshots ] && cp -r target/screenshots test-results/
-          [ -d target/cucumber-reports ] && cp -r target/cucumber-reports test-results/
-          [ -d target/surefire-reports ] && cp -r target/surefire-reports test-results/
-          [ -d test-output ] && cp -r test-output test-results/
 
+          [ -d target/screenshots ] && cp -r target/screenshots test-results/
+
+          [ -d target/cucumber-reports ] && cp -r target/cucumber-reports
+          test-results/
+
+          [ -d target/surefire-reports ] && cp -r target/surefire-reports
+          test-results/
+
+          [ -d test-output ] && cp -r test-output test-results/
       - name: Upload test artifacts
         uses: actions/upload-artifact@v4
         if: always()
@@ -44,17 +75,14 @@ jobs:
           name: test-results
           path: test-results/
           retention-days: 3
-
       - name: Capture service logs
         if: failure()
         run: |
           mkdir -p service-logs
-          docker compose logs selenium-hub > service-logs/selenium-hub.log
-          docker compose logs chrome > service-logs/chrome.log
-          docker compose logs firefox > service-logs/firefox.log
-          docker compose logs mysql > service-logs/mysql.log
-          docker compose logs test-runner > service-logs/test-runner.log
-
+          docker-compose logs selenium-hub > service-logs/selenium-hub.log
+          docker-compose logs chrome > service-logs/chrome.log
+          docker-compose logs firefox > service-logs/firefox.log
+          docker-compose logs mysql > service-logs/mysql.log
       - name: Upload service logs
         uses: actions/upload-artifact@v4
         if: failure()
@@ -62,7 +90,6 @@ jobs:
           name: service-logs
           path: service-logs/
           retention-days: 3
-
       - name: Clean up containers
         if: always()
-        run: docker compose down -v
+        run: docker-compose down -v
