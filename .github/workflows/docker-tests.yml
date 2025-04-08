@@ -28,10 +28,12 @@ jobs:
         run: |
           docker compose -f docker-compose.yml up -d --build
           docker compose ps
-          
+
+
+
       - name: Run tests in Docker container
         run: |
-          docker compose run --rm test-automation mvn test
+          docker compose run --rm test-runner mvn test
 
       - name: Capture logs on failure
         if: failure()
@@ -40,7 +42,7 @@ jobs:
           docker compose logs chrome > chrome.log
           docker compose logs firefox > firefox.log
           docker compose logs mysql > mysql.log
-          docker compose logs test-automation > test-automation.log
+          docker compose logs test-runner > test-runner.log
 
       - name: Upload test reports
         uses: actions/upload-artifact@v4
@@ -62,7 +64,7 @@ jobs:
             chrome.log
             firefox.log
             mysql.log
-            test-automation.log
+            test-runner.log
 
       - name: Stop and remove containers
         if: always()
