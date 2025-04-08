@@ -1,4 +1,4 @@
-version: '3'
+
 services:
   selenium-hub:
     image: selenium/hub:4.8.0
@@ -45,11 +45,14 @@ services:
       - "3306:3306"
 
   test-runner:
-    image: my-test-automation   # Your custom built image
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: my-test-automation
     networks:
       - mynetwork
     environment:
-      SELENIUM_HUB_URL: "http://localhost:4444/"
+      SELENIUM_HUB_URL: "http://selenium-hub:4444/wd/hub"
       DB_URL: "jdbc:mysql://mysql:3306/testdb"
       DB_USER: "testuser"
       DB_PASSWORD: "testpwd"
