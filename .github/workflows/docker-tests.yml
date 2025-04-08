@@ -23,24 +23,28 @@ jobs:
           key: ${{ runner.os }}-buildx-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-buildx-
+
       - name: Start containers with Docker Compose
         run: |
           docker compose -f docker-compose.yml up -d --build
           docker compose ps
+
       - name: Wait for Selenium Hub to be ready
         run: |
-          docker run --network sauce-demo-test_default \
+          docker run --network mynetwork \
             appropriate/curl --retry 10 --retry-delay 5 --retry-connrefused \
             selenium-hub:4444/wd/hub/status
           
       - name: Wait for MySQL to be ready
         run: |
-          docker run --network sauce-demo-test_default \
+          docker run --network mynetwork \
             appropriate/curl --retry 10 --retry-delay 5 --retry-connrefused \
             mysql:3306
+
       - name: Run tests in Docker container
         run: |
           docker compose run --rm test-automation mvn test
+
       - name: Capture logs on failure
         if: failure()
         run: |
@@ -49,6 +53,7 @@ jobs:
           docker compose logs firefox > firefox.log
           docker compose logs mysql > mysql.log
           docker compose logs test-automation > test-automation.log
+
       - name: Upload test reports
         uses: actions/upload-artifact@v4
         if: always()
@@ -58,6 +63,7 @@ jobs:
             target/cucumber-reports/
             target/surefire-reports/
             test-output/
+
       - name: Upload service logs
         uses: actions/upload-artifact@v4
         if: failure()
@@ -69,7 +75,7 @@ jobs:
             firefox.log
             mysql.log
             test-automation.log
+
       - name: Stop and remove containers
         if: always()
-        run: |
-          docker compose down -v
+        run: docker compose down -v
