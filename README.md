@@ -11,6 +11,8 @@ docker run --rm my-test-automation
 
 docker-compose up -d
 
+to access Selenium Grid : http://localhost:4444/ui#
+
 docker-compose down
 
 

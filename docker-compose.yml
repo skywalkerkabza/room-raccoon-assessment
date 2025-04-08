@@ -1,7 +1,10 @@
+version: '3'
 services:
   selenium-hub:
     image: selenium/hub:4.8.0
     container_name: selenium-hub
+    networks:
+      - mynetwork
     ports:
       - "4444:4444"
 
@@ -9,6 +12,8 @@ services:
     image: selenium/node-chrome:4.8.0
     depends_on:
       - selenium-hub
+    networks:
+      - mynetwork
     environment:
       - SE_EVENT_BUS_HOST=selenium-hub
       - SE_EVENT_BUS_PUBLISH_PORT=4442
@@ -18,6 +23,8 @@ services:
     image: selenium/node-firefox:4.8.0
     depends_on:
       - selenium-hub
+    networks:
+      - mynetwork
     environment:
       - SE_EVENT_BUS_HOST=selenium-hub
       - SE_EVENT_BUS_PUBLISH_PORT=4442
@@ -27,6 +34,8 @@ services:
     image: mysql:8.0
     container_name: mysql
     restart: always
+    networks:
+      - mynetwork
     environment:
       MYSQL_ROOT_PASSWORD: rootpwd
       MYSQL_DATABASE: testdb
@@ -34,3 +43,21 @@ services:
       MYSQL_PASSWORD: testpwd
     ports:
       - "3306:3306"
+
+  test-runner:
+    image: my-test-automation   # Your custom built image
+    networks:
+      - mynetwork
+    environment:
+      SELENIUM_HUB_URL: "http://localhost:4444/"
+      DB_URL: "jdbc:mysql://mysql:3306/testdb"
+      DB_USER: "testuser"
+      DB_PASSWORD: "testpwd"
+    depends_on:
+      - selenium-hub
+      - mysql
+    volumes:
+      - ./target/screenshots:/app/target/screenshots
+
+networks:
+  mynetwork:
