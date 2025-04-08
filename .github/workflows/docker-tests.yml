@@ -24,18 +24,6 @@ jobs:
           docker compose -f docker-compose.yml up -d --build
           docker compose ps
 
-      - name: Verify Selenium Hub readiness
-        run: |
-          docker run --network mynetwork \
-            appropriate/curl --retry 10 --retry-delay 5 --retry-connrefused \
-            selenium-hub:4444/wd/hub/status
-
-      - name: Verify MySQL readiness
-        run: |
-          docker run --network mynetwork \
-            appropriate/curl --retry 10 --retry-delay 5 --retry-connrefused \
-            mysql:3306
-
       - name: Run tests
         run: |
           docker compose run --rm test-runner mvn test
