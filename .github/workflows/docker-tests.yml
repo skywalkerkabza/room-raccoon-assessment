@@ -1,0 +1,99 @@
+name: Dockerized Test Execution
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  COMPOSE_PROJECT_NAME: sauce-demo-test
+  SELENIUM_HUB_URL: http://selenium-hub:4444/wd/hub
+  DB_URL: jdbc:mysql://mysql:3306/testdb
+  DB_USER: testuser
+  DB_PASSWORD: testpass
+
+jobs:
+  docker-compose-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Cache Docker layers
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
+
+      - name: Login to Docker Hub
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+      - name: Start containers with Docker Compose
+        run: |
+          docker-compose -f docker-compose.yml up -d --build
+          docker-compose ps
+
+      - name: Wait for services to be ready
+        run: |
+          docker run --network ${COMPOSE_PROJECT_NAME}_default \
+            appropriate/curl --retry 10 --retry-delay 5 --retry-connrefused \
+            selenium-hub:4444/wd/hub/status
+          
+          docker run --network ${COMPOSE_PROJECT_NAME}_default \
+            appropriate/curl --retry 10 --retry-delay 5 --retry-connrefused \
+            mysql:3306
+
+      - name: Run tests in Docker container
+        run: |
+          docker-compose run --rm test-automation mvn test
+        env:
+          SELENIUM_HUB_URL: ${{ env.SELENIUM_HUB_URL }}
+          DB_URL: ${{ env.DB_URL }}
+          DB_USER: ${{ env.DB_USER }}
+          DB_PASSWORD: ${{ env.DB_PASSWORD }}
+
+      - name: Capture logs on failure
+        if: failure()
+        run: |
+          docker-compose logs selenium-hub > selenium-hub.log
+          docker-compose logs chrome > chrome.log
+          docker-compose logs firefox > firefox.log
+          docker-compose logs mysql > mysql.log
+          docker-compose logs test-automation > test-automation.log
+
+      - name: Upload test reports
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: test-reports
+          path: |
+            target/cucumber-reports/
+            target/surefire-reports/
+            test-output/
+
+      - name: Upload service logs
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: service-logs
+          path: |
+            selenium-hub.log
+            chrome.log
+            firefox.log
+            mysql.log
+            test-automation.log
+
+      - name: Stop and remove containers
+        if: always()
+        run: |
+          docker-compose down -v
