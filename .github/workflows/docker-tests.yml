@@ -6,12 +6,21 @@ on:
   pull_request:
     branches: [ main ]
 
+env:
+  COMPOSE_PROJECT_NAME: sauce-demo-test
+
 jobs:
   docker-compose-tests:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Set up Docker Compose
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y docker-compose-plugin
+          docker compose version
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3.1.0
@@ -31,13 +40,13 @@ jobs:
 
       - name: Wait for Selenium Hub to be ready
         run: |
-          docker run --network sauce-demo-test_default \
+          docker run --network ${COMPOSE_PROJECT_NAME}_default \
             appropriate/curl --retry 10 --retry-delay 5 --retry-connrefused \
             selenium-hub:4444/wd/hub/status
           
       - name: Wait for MySQL to be ready
         run: |
-          docker run --network sauce-demo-test_default \
+          docker run --network ${COMPOSE_PROJECT_NAME}_default \
             appropriate/curl --retry 10 --retry-delay 5 --retry-connrefused \
             mysql:3306
 
@@ -45,36 +54,40 @@ jobs:
         run: |
           docker compose run --rm test-automation mvn test
 
-      - name: Capture logs on failure
-        if: failure()
+      - name: Capture screenshots and reports
+        if: always()
         run: |
-          docker compose logs selenium-hub > selenium-hub.log
-          docker compose logs chrome > chrome.log
-          docker compose logs firefox > firefox.log
-          docker compose logs mysql > mysql.log
-          docker compose logs test-automation > test-automation.log
+          mkdir -p test-artifacts
+          [ -d target/screenshots ] && cp -r target/screenshots test-artifacts/
+          [ -d target/cucumber-reports ] && cp -r target/cucumber-reports test-artifacts/
+          [ -d target/surefire-reports ] && cp -r target/surefire-reports test-artifacts/
+          [ -d test-output ] && cp -r test-output test-artifacts/
 
-      - name: Upload test reports
+      - name: Upload test artifacts
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: test-reports
-          path: |
-            target/cucumber-reports/
-            target/surefire-reports/
-            test-output/
+          name: test-artifacts
+          path: test-artifacts/
+          retention-days: 7
+
+      - name: Capture service logs
+        if: failure()
+        run: |
+          mkdir -p service-logs
+          docker compose logs selenium-hub > service-logs/selenium-hub.log
+          docker compose logs chrome > service-logs/chrome.log
+          docker compose logs firefox > service-logs/firefox.log
+          docker compose logs mysql > service-logs/mysql.log
+          docker compose logs test-automation > service-logs/test-automation.log
 
       - name: Upload service logs
         uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: service-logs
-          path: |
-            selenium-hub.log
-            chrome.log
-            firefox.log
-            mysql.log
-            test-automation.log
+          path: service-logs/
+          retention-days: 7
 
       - name: Stop and remove containers
         if: always()
