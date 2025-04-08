@@ -26,8 +26,8 @@ jobs:
 
       - name: Start containers with Docker Compose
         run: |
-          docker-compose -f docker-compose.yml up -d --build
-          docker-compose ps
+          docker compose -f docker-compose.yml up -d --build
+          docker compose ps
 
       - name: Wait for Selenium Hub to be ready
         run: |
@@ -43,16 +43,16 @@ jobs:
 
       - name: Run tests in Docker container
         run: |
-          docker-compose run --rm test-automation mvn test
+          docker compose run --rm test-automation mvn test
 
       - name: Capture logs on failure
         if: failure()
         run: |
-          docker-compose logs selenium-hub > selenium-hub.log
-          docker-compose logs chrome > chrome.log
-          docker-compose logs firefox > firefox.log
-          docker-compose logs mysql > mysql.log
-          docker-compose logs test-automation > test-automation.log
+          docker compose logs selenium-hub > selenium-hub.log
+          docker compose logs chrome > chrome.log
+          docker compose logs firefox > firefox.log
+          docker compose logs mysql > mysql.log
+          docker compose logs test-automation > test-automation.log
 
       - name: Upload test reports
         uses: actions/upload-artifact@v4
@@ -79,4 +79,4 @@ jobs:
       - name: Stop and remove containers
         if: always()
         run: |
-          docker-compose down -v
+          docker compose down -v
